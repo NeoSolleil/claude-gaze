@@ -84,3 +84,13 @@ test('WebSearch の結果（Hooks の構造化形式、実機で確認した形�
   assert.deepEqual(searchResultUrls(resp), ['https://blog.js.cytoscape.org/2019/03/06/3.5.0-release/', 'https://js.cytoscape.org/']);
   assert.deepEqual(searchResultUrls({ query: 'x', results: [] }), []);
 });
+
+test('Windows のパス（\\ 区切り）も / に揃えてディレクトリ分けする', () => {
+  const st = createState();
+  const win = 'C:\\Users\\u\\proj';
+  const ops = reduce(st, { hook_event_name: 'PostToolUse', session_id: 's1', cwd: win, tool_name: 'Read', tool_input: { file_path: win + '\\src\\app.ts' } });
+  const t = by(ops, 'touch')[0];
+  assert.equal(t.full, 'C:/Users/u/proj/src/app.ts'); assert.equal(t.label, 'app.ts');
+  assert.equal(t.group.gid, 'dir:src'); assert.equal(t.group.label, 'proj/src/');
+  assert.equal(by(ops, 'feed')[0].text, 'src/app.ts');
+});

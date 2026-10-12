@@ -6,8 +6,12 @@ export function createState() {
 
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
+/** Windows の区切り（\\）を / に揃える。表示・グループ分けはすべて / 前提 */
+export function norm(p) { return String(p).replace(/\\/g, '/'); }
+
 export function short(state, p) {
   if (!p) return '';
+  p = norm(p);
   if (state.root && p.startsWith(state.root + '/')) return p.slice(state.root.length + 1);
   if (state.root && p === state.root) return '.';
   return p.replace(/^https?:\/\//, '');
@@ -55,7 +59,7 @@ function ensureAgent(state, ops, id, type, main) {
 /** 1 件の Hooks イベントを ops に変換する。state は更新される */
 export function reduce(state, ev) {
   const ops = [];
-  if (!state.root && ev.cwd) { state.root = ev.cwd.replace(/\/$/, ''); state.rootName = base(state.root); ops.push({ op: 'session', cwd: state.root }); }
+  if (!state.root && ev.cwd) { state.root = norm(ev.cwd).replace(/\/$/, ''); state.rootName = base(state.root); ops.push({ op: 'session', cwd: state.root }); }
   ensureAgent(state, ops, 'main', 'main', true);
   const a = ev.agent_id || 'main';
   if (a !== 'main') ensureAgent(state, ops, a, ev.agent_type || 'subagent', false);
@@ -95,17 +99,18 @@ export function reduce(state, ev) {
   let feedText = '', feedKind = 'file', nowText = tool;
 
   if (FILE_TOOLS.has(tool) && typeof inp.file_path === 'string') {
-    touch('file:' + inp.file_path, 'file', base(inp.file_path), inp.file_path, { tool });
-    feedText = short(state, inp.file_path); nowText = tool + ' ' + feedText;
+    const fp = norm(inp.file_path);
+    touch('file:' + fp, 'file', base(fp), fp, { tool });
+    feedText = short(state, fp); nowText = tool + ' ' + feedText;
   } else if ((tool === 'Glob' || tool === 'Grep')) {
-    const dir = typeof inp.path === 'string' ? inp.path : (ev.cwd || state.root);
+    const dir = norm(typeof inp.path === 'string' ? inp.path : (ev.cwd || state.root));
     const rel = short(state, dir).replace(/\/$/, ''); const d = rel === '.' ? '' : rel;
     ops.push({ op: 'dir', agent: a, gid: 'dir:' + d, label: state.rootName + '/' + (d ? d + '/' : ''), tool, pattern: String(inp.pattern || '') });
     targets.push({ gid: 'dir:' + d });
     feedText = (inp.pattern || '') + '  in ' + (d || '.'); nowText = tool + ' ' + (inp.pattern || '');
   } else if (tool === 'Bash') {
     const cmd = String(inp.command || ''); const cmdName = cmd.trim().split(/\s+/)[0] || 'sh';
-    const files = (ev.gaze && Array.isArray(ev.gaze.files)) ? ev.gaze.files : [];
+    const files = (ev.gaze && Array.isArray(ev.gaze.files)) ? ev.gaze.files.map(norm) : [];
     if (files.length) files.forEach(f => touch('file:' + f, 'file', base(f), f, { tool: 'Bash(推定): ' + cmd, guess: true, cmd: cmdName }));
     else touch('cmd:' + cmdName, 'cmd', cmdName, cmd, { tool: 'Bash: ' + cmd });
     feedText = cmd; feedKind = 'cmd'; nowText = 'Bash ' + cmd.slice(0, 40);
