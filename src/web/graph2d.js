@@ -72,7 +72,8 @@ export function createGraph2D({ model, ui, container }) {
         yTop += LANE_HEAD + h + LANE_GAP;
       });
     }
-    cy.batch(() => { for (const id in pos) { const n = cy.getElementById(id); if (n.empty()) continue; if (n.hasClass('folded') && n.children().length) continue; n.stop(true); if (animate) n.animate({ position: pos[id] }, { duration: 260, easing: 'ease-out' }); else n.position(pos[id]); } });
+    // 空だった枠に子が入ると、枠に残っていた古い移動アニメが子を引きずる。配置前に全ノードのアニメを止める
+    cy.batch(() => { cy.nodes().stop(true); for (const id in pos) { const n = cy.getElementById(id); if (n.empty()) continue; if (n.hasClass('folded') && n.children().length) continue; if (animate) n.animate({ position: pos[id] }, { duration: 260, easing: 'ease-out' }); else n.position(pos[id]); } });
   }
   function ensureGroup(a, g) {
     const id = gk(a, g.gid); let n = cy.getElementById(id);
