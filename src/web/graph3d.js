@@ -83,6 +83,7 @@ export function createGraph3D({ model, ui, container }) {
   function counts() { const c = {}; model.order.forEach(id => { c[id] = byId[id] ? byId[id].count : 0; }); return c; }
   function reset() { nodes.length = 0; links.length = 0; for (const k in byId) delete byId[k]; push(); }
   function fit() { G.width(container.clientWidth).height(container.clientHeight); setTimeout(() => G.zoomToFit(400, 30), 600); }
+  window.gaze = Object.assign(window.gaze || {}, { g3d: G });
 
   // ---- 毎フレーム: 選択・いま・絞り込みを three のオブジェクトへ ----
   let hotSig = '';
