@@ -72,6 +72,15 @@ const server = createServer(async (req, res) => {
   }
 });
 
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`claude-gaze: ポート ${PORT} は使用中です。別の claude-gaze が動いているか、他のプロセスが使っています。`);
+    console.error(`  起動中のものをそのまま使うか、GAZE_PORT=<番号> npm start で別のポートにしてください（Hooks 側の URL も合わせる）。`);
+  } else {
+    console.error(`claude-gaze: 起動に失敗しました: ${err.message}`);
+  }
+  process.exit(1);
+});
 server.listen(PORT, HOST, () => {
   console.log(`claude-gaze: http://${HOST}:${PORT}/  (POST /hook, GET /events?session=<id>, GET /sessions)`);
 });
