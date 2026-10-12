@@ -1,0 +1,25 @@
+#!/bin/sh
+# デモ用: 架空セッション（主体 3 体、失敗・検索・MCP・Skill・Bash 推定を含む）をサーバへ投入する
+H=${GAZE_URL:-http://127.0.0.1:4820}; CWD=$(pwd); SID=${1:-demo-$(date +%H%M%S)}
+post() { curl -s -o /dev/null -m 2 -X POST "$H/hook" -H 'content-type: application/json' --data-binary "$1"; }
+post "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\"}"
+post "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"prompt\":\"サーバの構成を調べて README を直して\"}"
+post "{\"hook_event_name\":\"PostToolUseFailure\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$CWD/CHANGELOG.md\"},\"error\":\"File does not exist\",\"tool_use_id\":\"t0\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$CWD/src/server/main.ts\"},\"tool_use_id\":\"t1\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Glob\",\"tool_input\":{\"pattern\":\"src/**/*.ts\",\"path\":\"$CWD\"},\"tool_use_id\":\"t2\"}"
+post "{\"hook_event_name\":\"SubagentStart\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-e1\",\"agent_type\":\"Explore\"}"
+post "{\"hook_event_name\":\"SubagentStart\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-w1\",\"agent_type\":\"general-purpose\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-e1\",\"agent_type\":\"Explore\",\"tool_name\":\"Grep\",\"tool_input\":{\"pattern\":\"subscribe\",\"path\":\"$CWD/src/server\"},\"tool_use_id\":\"t3\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-w1\",\"agent_type\":\"general-purpose\",\"tool_name\":\"WebSearch\",\"tool_input\":{\"query\":\"node http server sse example\"},\"tool_response\":\"Web search results for query: \\\"node http server sse example\\\"\\n\\nLinks: [{\\\"title\\\":\\\"MDN\\\",\\\"url\\\":\\\"https://developer.mozilla.org/docs/Web/API/EventSource\\\"},{\\\"title\\\":\\\"nodejs\\\",\\\"url\\\":\\\"https://nodejs.org/api/http.html\\\"},{\\\"title\\\":\\\"so\\\",\\\"url\\\":\\\"https://stackoverflow.com/q/9070700\\\"}]\\n\\nx\",\"tool_use_id\":\"t4\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-e1\",\"agent_type\":\"Explore\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$CWD/src/server/sse.ts\"},\"tool_use_id\":\"t5\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-e1\",\"agent_type\":\"Explore\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$CWD/src/server/main.ts\"},\"tool_use_id\":\"t6\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-w1\",\"agent_type\":\"general-purpose\",\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://nodejs.org/api/http.html\",\"prompt\":\"x\"},\"tool_use_id\":\"t7\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"mcp__github__search_issues\",\"tool_input\":{\"q\":\"sse\"},\"mcp_server\":{\"name\":\"github\"},\"tool_use_id\":\"t8\"}"
+post "{\"hook_event_name\":\"SubagentStop\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-e1\",\"agent_type\":\"Explore\"}"
+post "{\"hook_event_name\":\"SubagentStop\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"agent_id\":\"agent-w1\",\"agent_type\":\"general-purpose\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"sed -n '1,20p' README.md\"},\"tool_use_id\":\"t9\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$CWD/README.md\",\"old_string\":\"a\",\"new_string\":\"b\"},\"tool_use_id\":\"t10\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Skill\",\"tool_input\":{\"skill\":\"commit\"},\"tool_use_id\":\"t11\"}"
+post "{\"hook_event_name\":\"PostToolUse\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"npm test\"},\"tool_use_id\":\"t12\"}"
+post "{\"hook_event_name\":\"Stop\",\"session_id\":\"$SID\",\"cwd\":\"$CWD\"}"
+echo "posted demo session $SID"
