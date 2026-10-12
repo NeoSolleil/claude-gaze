@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/server/main.ts",
     "test": "node --test",
-    "hooks:print": "cat hooks/hooks.snippet.json"
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:remove": "node scripts/install-hooks.mjs --remove",
+    "hooks:print": "node scripts/install-hooks.mjs --print"
   },
   "engines": {
     "node": ">=23.6"
