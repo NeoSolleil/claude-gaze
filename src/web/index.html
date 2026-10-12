@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>claude-gaze</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 3 列（セッション | グラフ | 右ペイン）＋下部バー。ダーク基調、ライトにも追従 */
+:root {
+  --bg: #15181e; --panel: #1c2027; --line: #2b313b; --fg: #e4e7ec; --muted: #8b93a1;
+  --accent: #f0a35e;
+  --c-file: #6ea8fe; --c-url: #5fd1b0; --c-query: #e6c15a; --c-mcp: #c48cf2; --c-cmd: #9aa3b2;
+  --hot: #ffffff; --group: #262c36;
+  --a0: #f0a35e; --a1: #58a6f5; --a2: #6cc98d; --a3: #e38ad0; --a4: #e6c15a; --a5: #9d93f0;
+  --font-ui: "IBM Plex Sans JP", system-ui, -apple-system, "Noto Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f3f4f7; --panel: #ffffff; --line: #d9dde5; --fg: #1d222b; --muted: #626b79;
+  --accent: #c7762a; --c-file: #2f6fd6; --c-url: #1f9b7a; --c-query: #b08a12; --c-mcp: #8a4fd0; --c-cmd: #6b7585; --hot: #000000; --group: #e9ecf1;
+  --a0: #c7762a; --a1: #2f6fd6; --a2: #1f9b7a; --a3: #b04a99; --a4: #b08a12; --a5: #6a5dd4;
+  color-scheme: light;
+} }
+:root[data-theme="light"] {
+  --bg: #f3f4f7; --panel: #ffffff; --line: #d9dde5; --fg: #1d222b; --muted: #626b79;
+  --accent: #c7762a; --c-file: #2f6fd6; --c-url: #1f9b7a; --c-query: #b08a12; --c-mcp: #8a4fd0; --c-cmd: #6b7585; --hot: #000000; --group: #e9ecf1;
+  --a0: #c7762a; --a1: #2f6fd6; --a2: #1f9b7a; --a3: #b04a99; --a4: #b08a12; --a5: #6a5dd4;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 13px; }
+.app { height: 100%; display: grid; grid-template-rows: 44px 1fr 48px; grid-template-columns: 220px 1fr 320px;
+  grid-template-areas: "top top top" "left graph right" "bar bar bar"; }
+header.top { grid-area: top; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header.top h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+header.top .mock { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; }
+header.top .spacer { flex: 1; }
+header.top .clock { font-family: var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+aside.left { grid-area: left; border-right: 1px solid var(--line); background: var(--panel); overflow: auto; min-width: 0; }
+aside.right { grid-area: right; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.graph { grid-area: graph; position: relative; min-width: 0; min-height: 0; }
+#cy, #g3d { position: absolute; inset: 0; }
+#g3d canvas { outline: none; }
+#cy[hidden], #g3d[hidden] { display: none; }
+.legend { position: absolute; left: 12px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--dot); vertical-align: -1px; }
+.turn { position: absolute; right: 12px; top: 10px; font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: right; max-width: 46%; }
+.turn b { color: var(--fg); font-weight: 500; }
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; padding: 12px 14px 6px; font-weight: 500; }
+.session { padding: 10px 14px; border-left: 3px solid transparent; cursor: pointer; }
+.session.active { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.session .name { font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.session .live { width: 7px; height: 7px; border-radius: 50%; background: var(--c-url); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-url) 25%, transparent); }
+.session .ended { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.session .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agents { padding: 4px 14px 12px; display: grid; gap: 6px; }
+.agent { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.agent .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--sw, var(--accent)); flex: none; }
+.agent .lin { font-size: 10px; color: var(--muted); }
+.agent .st { margin-left: auto; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+.detail { padding: 10px 14px; border-bottom: 1px solid var(--line); min-height: 92px; max-height: 42%; overflow: auto; }
+.detail .kind { font-size: 11px; color: var(--muted); }
+.detail .label { font-family: var(--font-mono); font-size: 12px; word-break: break-all; margin: 3px 0 6px; }
+.detail .row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail .row b { color: var(--fg); font-weight: 500; text-align: right; }
+.detail pre { font-family: var(--font-mono); font-size: 10.5px; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
+.tabs { display: flex; gap: 4px; padding: 6px 14px 8px; flex-wrap: wrap; }
+.tab { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; color: var(--muted); background: transparent; }
+.tab.on { color: var(--accent); border-color: var(--accent); }
+.feed { flex: 1; overflow: auto; min-height: 0; }
+.ev { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 6px 14px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: pointer; }
+.ev:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.ev.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ev.rel { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.detail .list { font-family: var(--font-mono); font-size: 10.5px; margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.detail .list li { display: grid; grid-template-columns: 34px 1fr; gap: 6px; color: var(--muted); }
+.detail .list li b { color: var(--fg); font-weight: 400; word-break: break-all; }
+.ev.hide { display: none; }
+.ev .t { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev .who { font-size: 10px; color: var(--accent); }
+.ev .what { font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .what i { font-style: normal; color: var(--dot); }
+.ev.new { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } to { background: transparent; } }
+footer.bar { grid-area: bar; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; overflow: auto; }
+footer label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+footer label.off { color: var(--muted); cursor: default; }
+footer input[type="checkbox"] { accent-color: var(--accent); }
+footer .sep { width: 1px; height: 22px; background: var(--line); }
+footer input[type="range"] { width: 90px; accent-color: var(--accent); }
+footer .v { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 72px; }
+button { font: inherit; font-size: 12px; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, .session:focus-visible, .ev:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { border-color: var(--accent); color: var(--accent); }
+select { font: inherit; font-size: 12px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+@media (max-width: 860px) {
+  .app { grid-template-rows: 44px 56vh auto auto auto; grid-template-columns: 1fr; grid-template-areas: "top" "graph" "bar" "left" "right"; height: auto; min-height: 100%; }
+  aside.left, aside.right { border: 0; border-top: 1px solid var(--line); }
+  aside.right { max-height: 60vh; }
+  footer.bar { padding: 8px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .ev.new { animation: none; } }
+
+.session .meta b { color: var(--fg); font-weight: 500; }
+.empty { padding: 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.empty code { font-family: var(--font-mono); font-size: 11px; }
+.ev { grid-template-columns: 60px 1fr; }
+.status { font-size: 11px; color: var(--muted); }
+.status.on { color: var(--c-url); }
+.badge { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>claude-gaze</h1>
+    <span class="status" id="status">サーバ未接続</span>
+    <span class="spacer"></span>
+    <span class="clock" id="clock"></span>
+  </header>
+
+  <aside class="left">
+    <h2>セッション</h2>
+    <div id="sessions"><div class="empty">まだイベントが届いていません。<br>Hooks が有効な Claude Code でツールを使うと、ここにセッションが現れます。</div></div>
+    <h2>主体</h2>
+    <div class="agents" id="agents"></div>
+  </aside>
+
+  <main class="graph">
+    <div id="cy"></div>
+    <div id="g3d" hidden></div>
+    <div class="legend">
+      <span style="--dot: transparent">塗り = 主体の色 ／ 縁と形 = 種類:</span>
+      <span style="--dot: var(--c-file)">ファイル</span>
+      <span style="--dot: var(--c-url)">URL</span>
+      <span style="--dot: var(--c-query)">◆ 検索</span>
+      <span style="--dot: var(--c-mcp)">■ MCP / Skill</span>
+      <span style="--dot: var(--c-cmd)">コマンド</span>
+      <span style="--dot: transparent">◈n = n 体が共有 ／ (cat) = そのコマンドが参照（破線・推定） ／ 太い縁 = 各主体の最新 ／ 枠クリックで畳む</span>
+    </div>
+    <div class="turn" id="turn"></div>
+  </main>
+
+  <aside class="right">
+    <div class="detail" id="detail"><div class="kind">ノードかイベントを選択すると詳細が出ます</div></div>
+    <h2>イベント <span class="badge" id="buffered"></span></h2>
+    <div class="tabs" id="tabs"></div>
+    <div class="feed" id="feed"></div>
+  </aside>
+
+  <footer class="bar">
+    <button class="primary" id="play" title="描画の進行を止める／再開する。Claude Code 本体には影響しない。停止中に届いたイベントは溜めて、再開時に順に描く">一時停止</button>
+    <span class="sep"></span>
+    <label title="Read / Edit / Write / Glob / Grep で触ったファイルとディレクトリ枠を表示する。外すと Bash経由（推定）のファイルも隠れる"><input type="checkbox" id="f-file" checked>ファイル</label>
+    <label title="WebFetch で読んだ URL と、検索結果を展開して出た URL を表示する"><input type="checkbox" id="f-url" checked>URL</label>
+    <label title="WebSearch の検索クエリ（菱形）を表示する。クリックで結果 URL を展開"><input type="checkbox" id="f-query" checked>検索</label>
+    <label title="MCP サーバのツール呼び出しと Skill の起動を表示する"><input type="checkbox" id="f-mcp" checked>MCP</label>
+    <label title="ファイルを参照しない Bash コマンド（npm, git など）をコマンド名のノードで表示する"><input type="checkbox" id="f-cmd" checked>コマンド</label>
+    <label id="l-guess" title="cat / grep / sed などシェル経由で触ったファイル。コマンド文字列からの推定なので破線で描く。「ファイル」が表示中のときだけ有効"><input type="checkbox" id="f-guess" checked>Bash経由（推定）</label>
+    <span class="sep"></span>
+    <label title="地図: 対象を 1 枚にまとめ、塗りで主体を示す ／ 主体別: 主体ごとの帯に分ける ／ 3D: 力学配置の立体表示（デモ向け）">表示 <select id="view"><option value="map" selected>2D 地図</option><option value="lanes">2D 主体別</option><option value="3d">3D</option></select></label>
+    <label title="新しいノードが画面外に出たら自動で全体を収める。直前 6 秒に操作したとき、何かを選択中は動かない"><input type="checkbox" id="f-follow" checked>自動で全体表示</label>
+    <label title="カメラをゆっくり回し続ける（3D のみ、デモ用）" hidden><input type="checkbox" id="f-spin">自動回転</label>
+  </footer>
+</div>
+<script src="/vendor/cytoscape.min.js"></script>
+<script type="module" src="/live.js"></script>
+</body>
+</html>
