@@ -162,7 +162,7 @@ src/server/   main.ts（HTTP+SSE+静的配信） hooks.ts（型と検査） stor
 src/web/      events.js（Hooks JSON → ops、純関数・テスト済み） model.js（主体・イベント・逆引きの共有状態）
               ui.js（右ペイン・主体一覧・フィルタ） graph2d.js（Cytoscape。地図／主体別・折りたたみ） graph3d.js（3d-force-graph） live.js（SSE・切替・一時停止）
 hooks/        hooks.snippet.json（settings.json に写す Hooks 設定）
-scripts/      demo-session.sh（架空セッションの投入）
+scripts/      install-hooks.mjs（Hooks の導入・削除）, demo-session.sh（架空セッションの投入）, shoot.mjs（画像・GIF の生成）, measure-guess.mjs（Bash 推定の計測）
 test/         events.test.js（node:test）
 ```
 
@@ -195,7 +195,7 @@ test/         events.test.js（node:test）
 | モック | UI の決定（本書 §3・§4） | 済（2026-10-12） | 済 |
 | P0 | 受信サーバ + SSE + 描画（1 セッション、ファイル／URL／主体色／「いま」） | 済（2026-10-12）。遅延 4〜5 ms | 済 |
 | P1 | サブエージェント、検索結果の畳み込み、MCP／Skill、Bash 推定、失敗した呼び出し、主体タブ、地図／主体別、枠の折りたたみ、3D | 済（2026-10-12）。Bash 推定: 過去ログ 45 件中 15 件で実在ファイルを検出、未検出 30 件の大半は起動・curl・rm などファイルを読まないコマンド | 済 |
-| P2 | プラグイン化、README、導入手順、Qiita 記事の素材（スクショ・GIF）。3D の同梱可否 | 別マシンで `claude plugin` から導入して動く | 6〜10 時間 |
+| P2 | README、導入スクリプト、他環境向けの対処（ポート衝突・Windows パス）、Qiita 記事の素材（スクショ・GIF・骨子）、3D の同梱判断 | 済（2026-10-12）。導入は `npm run hooks:install`。3D は同梱（選択時のみ読み込むため 2D の表示に影響しない）。プラグイン化は保留（Hooks 単体で動くため必須ではない。配布経路として後日追加） | 済 |
 | P3（任意） | JSONL からの過去セッション再生 | Hooks 導入前のセッションを選んで再生できる | 未見積もり。形式依存のため着手判断は P2 後 |
 
 ### リスク
@@ -203,4 +203,4 @@ test/         events.test.js（node:test）
 - Hooks の `tool_response` 形式がツールごとに未定義。WebSearch の結果 URL 抽出はバージョンで壊れうる。壊れたらクエリノードだけ残る設計にする
 - Bash 由来のファイル参照は実ログでツール呼び出しの過半を占める。推定の精度がそのまま見え方を左右する。P1 で実装し、精度を実ログで測る
 - ディレクトリ枠は対象が増えると縦に長くなる。P1 で枠の折りたたみ（ディレクトリ単位で畳む）を入れる
-- 公開後は他人の環境で動く。サーバ未起動・ポート衝突・Windows のパス形式は P2 で扱う
+- 公開後は他人の環境で動く。サーバ未起動は Hook 側の 1 秒タイムアウトで吸収、ポート衝突は起動時に案内、Windows のパス形式は `/` に正規化（P2 で対応。Windows 実機は未検証）
