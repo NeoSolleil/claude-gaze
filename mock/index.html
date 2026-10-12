@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>claude-gaze Mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 3 columns (sessions | graph | feed) over a control bar. Dark-first observability console. */
+:root {
+  --bg: #15181e; --panel: #1c2027; --line: #2b313b; --fg: #e4e7ec; --muted: #8b93a1;
+  --accent: #f0a35e;
+  --c-file: #6ea8fe; --c-url: #5fd1b0; --c-query: #e6c15a; --c-mcp: #c48cf2; --c-cmd: #9aa3b2;
+  --hot: #ffffff; --group: #262c36;
+  --a0: #f0a35e; --a1: #58a6f5; --a2: #6cc98d; --a3: #e38ad0; --a4: #e6c15a; --a5: #9d93f0;
+  --font-ui: "IBM Plex Sans JP", system-ui, -apple-system, "Noto Sans JP", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f3f4f7; --panel: #ffffff; --line: #d9dde5; --fg: #1d222b; --muted: #626b79;
+  --accent: #c7762a; --c-file: #2f6fd6; --c-url: #1f9b7a; --c-query: #b08a12; --c-mcp: #8a4fd0; --c-cmd: #6b7585; --hot: #000000; --group: #e9ecf1;
+  --a0: #c7762a; --a1: #2f6fd6; --a2: #1f9b7a; --a3: #b04a99; --a4: #b08a12; --a5: #6a5dd4;
+  color-scheme: light;
+} }
+:root[data-theme="light"] {
+  --bg: #f3f4f7; --panel: #ffffff; --line: #d9dde5; --fg: #1d222b; --muted: #626b79;
+  --accent: #c7762a; --c-file: #2f6fd6; --c-url: #1f9b7a; --c-query: #b08a12; --c-mcp: #8a4fd0; --c-cmd: #6b7585; --hot: #000000; --group: #e9ecf1;
+  --a0: #c7762a; --a1: #2f6fd6; --a2: #1f9b7a; --a3: #b04a99; --a4: #b08a12; --a5: #6a5dd4;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 13px; }
+.app { height: 100%; display: grid; grid-template-rows: 44px 1fr 48px; grid-template-columns: 220px 1fr 320px;
+  grid-template-areas: "top top top" "left graph right" "bar bar bar"; }
+header.top { grid-area: top; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header.top h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+header.top .mock { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; }
+header.top .spacer { flex: 1; }
+header.top .clock { font-family: var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+aside.left { grid-area: left; border-right: 1px solid var(--line); background: var(--panel); overflow: auto; min-width: 0; }
+aside.right { grid-area: right; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.graph { grid-area: graph; position: relative; min-width: 0; min-height: 0; }
+#cy { position: absolute; inset: 0; }
+.legend { position: absolute; left: 12px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--dot); vertical-align: -1px; }
+.turn { position: absolute; right: 12px; top: 10px; font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: right; max-width: 46%; }
+.turn b { color: var(--fg); font-weight: 500; }
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; padding: 12px 14px 6px; font-weight: 500; }
+.session { padding: 10px 14px; border-left: 3px solid transparent; cursor: pointer; }
+.session.active { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.session .name { font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.session .live { width: 7px; height: 7px; border-radius: 50%; background: var(--c-url); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-url) 25%, transparent); }
+.session .ended { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.session .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agents { padding: 4px 14px 12px; display: grid; gap: 6px; }
+.agent { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.agent .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--sw, var(--accent)); flex: none; }
+.agent .lin { font-size: 10px; color: var(--muted); }
+.agent .st { margin-left: auto; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+.detail { padding: 10px 14px; border-bottom: 1px solid var(--line); min-height: 92px; max-height: 42%; overflow: auto; }
+.detail .kind { font-size: 11px; color: var(--muted); }
+.detail .label { font-family: var(--font-mono); font-size: 12px; word-break: break-all; margin: 3px 0 6px; }
+.detail .row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail .row b { color: var(--fg); font-weight: 500; text-align: right; }
+.detail pre { font-family: var(--font-mono); font-size: 10.5px; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
+.tabs { display: flex; gap: 4px; padding: 6px 14px 8px; flex-wrap: wrap; }
+.tab { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; color: var(--muted); background: transparent; }
+.tab.on { color: var(--accent); border-color: var(--accent); }
+.feed { flex: 1; overflow: auto; min-height: 0; }
+.ev { display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 6px 14px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: pointer; }
+.ev:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.ev.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ev.rel { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.detail .list { font-family: var(--font-mono); font-size: 10.5px; margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.detail .list li { display: grid; grid-template-columns: 34px 1fr; gap: 6px; color: var(--muted); }
+.detail .list li b { color: var(--fg); font-weight: 400; word-break: break-all; }
+.ev.hide { display: none; }
+.ev .t { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev .who { font-size: 10px; color: var(--accent); }
+.ev .what { font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev .what i { font-style: normal; color: var(--dot); }
+.ev.new { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } to { background: transparent; } }
+footer.bar { grid-area: bar; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; overflow: auto; }
+footer label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+footer label.off { color: var(--muted); cursor: default; }
+footer input[type="checkbox"] { accent-color: var(--accent); }
+footer .sep { width: 1px; height: 22px; background: var(--line); }
+footer input[type="range"] { width: 90px; accent-color: var(--accent); }
+footer .v { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 72px; }
+button { font: inherit; font-size: 12px; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, .session:focus-visible, .ev:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { border-color: var(--accent); color: var(--accent); }
+select { font: inherit; font-size: 12px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+@media (max-width: 860px) {
+  .app { grid-template-rows: 44px 56vh auto auto auto; grid-template-columns: 1fr; grid-template-areas: "top" "graph" "bar" "left" "right"; height: auto; min-height: 100%; }
+  aside.left, aside.right { border: 0; border-top: 1px solid var(--line); }
+  aside.right { max-height: 60vh; }
+  footer.bar { padding: 8px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .ev.new { animation: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1>claude-gaze</h1>
+    <span class="mock">モック: 架空のセッションを再生中</span>
+    <span class="spacer"></span>
+    <span class="clock" id="clock">t=0.0s</span>
+  </header>
+
+  <aside class="left">
+    <h2>セッション</h2>
+    <div class="session active" tabindex="0">
+      <div class="name"><span class="live"></span>shop-api</div>
+      <div class="meta">~/proj/shop-api</div>
+      <div class="meta">14:52 開始 · 3 agents</div>
+    </div>
+    <div class="session" tabindex="0">
+      <div class="name"><span class="ended"></span>blog-cli</div>
+      <div class="meta">~/proj/blog-cli</div>
+      <div class="meta">13:10 終了 · 1 agent</div>
+    </div>
+    <h2>主体</h2>
+    <div class="agents" id="agents"></div>
+  </aside>
+
+  <main class="graph">
+    <div id="cy"></div>
+    <div class="legend">
+      <span style="--dot: transparent">塗り = 主体の色（左の一覧）／ 縁と形 = 種類:</span>
+      <span style="--dot: var(--c-file)">ファイル</span>
+      <span style="--dot: var(--c-url)">URL</span>
+      <span style="--dot: var(--c-query)">◆ 検索</span>
+      <span style="--dot: var(--c-mcp)">■ MCP / Skill</span>
+      <span style="--dot: var(--c-cmd)">コマンド</span>
+      <span style="--dot: transparent">◈n = n 体が共有 ／ (cat) = そのコマンドが参照（破線・推定） ／ 太い縁 = 各主体の最新イベント</span>
+    </div>
+    <div class="turn" id="turn"></div>
+  </main>
+
+  <aside class="right">
+    <div class="detail" id="detail"><div class="kind">ノードかイベントを選択すると詳細が出ます</div></div>
+    <h2>イベント</h2>
+    <div class="tabs" id="tabs"></div>
+    <div class="feed" id="feed"></div>
+  </aside>
+
+  <footer class="bar">
+    <button class="primary" id="play" title="描画の進行を止める／再開する。モックでは架空セッションの再生を止めるだけ。本番でも Claude Code 本体には影響しない">一時停止</button>
+    <select id="speed" aria-label="再生速度" title="架空セッションの再生速度（モック専用。本番では実時間）"><option value="1">1x</option><option value="4" selected>4x</option><option value="10">10x</option></select>
+    <button id="reset" title="架空セッションを最初から再生し直す">最初から</button>
+    <span class="sep"></span>
+    <label title="Read / Edit / Write / Glob / Grep で触ったファイルとディレクトリ枠を表示する。外すと Bash経由（推定）のファイルも隠れる"><input type="checkbox" id="f-file" checked>ファイル</label>
+    <label title="WebFetch で読んだ URL と、検索結果を展開して出た URL を表示する"><input type="checkbox" id="f-url" checked>URL</label>
+    <label title="WebSearch の検索クエリ（菱形）を表示する。クリックで結果 URL を展開"><input type="checkbox" id="f-query" checked>検索</label>
+    <label title="MCP サーバのツール呼び出しと Skill の起動を表示する"><input type="checkbox" id="f-mcp" checked>MCP</label>
+    <label title="ファイルを参照しない Bash コマンド（npm, git など）をコマンド名のノードで表示する"><input type="checkbox" id="f-cmd" checked>コマンド</label>
+    <label id="l-guess" title="cat / grep / sed などシェル経由で触ったファイル。コマンド文字列からの推定なので破線で描く。外すと推定由来のノードと線を隠す。「ファイル」が表示中のときだけ有効"><input type="checkbox" id="f-guess" checked>Bash経由（推定）</label>
+    <span class="sep"></span>
+    <label title="地図: 対象を 1 枚にまとめ、塗りで主体を示す ／ 主体別: 主体ごとの帯に分けて表示">表示 <select id="view" aria-label="表示方式"><option value="map" selected>地図</option><option value="lanes">主体別</option></select></label>
+    <label title="新しいノードが画面外に出たら自動で全体を収める。直前 6 秒に操作したとき、何かを選択中は動かない"><input type="checkbox" id="f-follow" checked>自動で全体表示</label>
+    <span class="sep"></span>
+
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const COLORS = () => ({ agent: css('--accent'), file: css('--c-file'), url: css('--c-url'), query: css('--c-query'), mcp: css('--c-mcp'), cmd: css('--c-cmd'), result: css('--c-url'), hot: css('--hot'), fg: css('--fg'), muted: css('--muted'), line: css('--line'), group: css('--group') });
+  let C = COLORS();
+
+  // ---- 架空セッションのイベント（Hooks の stdin JSON を模した形） ----
+  const P = '/home/user/proj/shop-api/';
+  const SID = '3f1c7a2e-5b0d-4e8a-9c21-7d4f0a6b1e55';
+  const EV = [
+    [0,  'UserPromptSubmit', null, null, { prompt: '注文APIにレート制限を入れて。既存のミドルウェア構成に合わせて' }],
+    [1,  'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'CLAUDE.md' }, tool_response: { type: 'text', file: { filePath: P + 'CLAUDE.md', content: '# shop-api\n\nFastify 製の注文 API。ミドルウェアは src/middleware/ に置き、app.ts で登録する。…' } } }],
+    [3,  'PostToolUse', null, null, { tool_name: 'Glob', tool_input: { pattern: 'src/**/*.ts', path: P }, tool_response: { filenames: [P + 'src/app.ts', P + 'src/config.ts', P + 'src/routes/orders.ts', P + 'src/middleware/auth.ts', P + 'src/middleware/logger.ts'], numFiles: 5 } }],
+    [5,  'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'src/app.ts' }, tool_response: { type: 'text', file: { filePath: P + 'src/app.ts', content: "import Fastify from 'fastify';\nimport { auth } from './middleware/auth';\n…" } } }],
+    [7,  'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'src/routes/orders.ts' }, tool_response: { type: 'text', file: { filePath: P + 'src/routes/orders.ts', content: "export async function ordersRoutes(app) {\n  app.post('/orders', { preHandler: [auth] }, …" } } }],
+    [9,  'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'cat src/config.ts | head -40', description: 'Show config' }, tool_response: { stdout: 'export const config = {\n  port: 3000,\n  redisUrl: process.env.REDIS_URL,\n};', stderr: '', interrupted: false } }],
+    [12, 'SubagentStart', 'ag-explore', 'Explore', {}],
+    [12, 'SubagentStart', 'ag-web', 'general-purpose', {}],
+    [14, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Grep', tool_input: { pattern: 'rateLimit|rate-limit', path: P + 'src' }, tool_response: { mode: 'files_with_matches', filenames: [], numFiles: 0 } }],
+    [15, 'PostToolUse', 'ag-web', 'general-purpose', { tool_name: 'WebSearch', tool_input: { query: 'fastify rate limit plugin per route', mode: 'standard' }, results: ['https://github.com/fastify/fastify-rate-limit', 'https://www.npmjs.com/package/@fastify/rate-limit', 'https://fastify.dev/docs/latest/Reference/Middleware/', 'https://stackoverflow.com/questions/71823451', 'https://dev.to/fastify-rate-limit-guide', 'https://blog.logrocket.com/rate-limiting-node-js/', 'https://github.com/animir/node-rate-limiter-flexible', 'https://www.npmjs.com/package/rate-limiter-flexible'] }],
+    [17, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Read', tool_input: { file_path: P + 'src/middleware/auth.ts' } }],
+    [19, 'PostToolUse', 'ag-web', 'general-purpose', { tool_name: 'WebFetch', tool_input: { url: 'https://github.com/fastify/fastify-rate-limit', prompt: 'Summarize the options and per-route usage' }, tool_response: 'The plugin exposes max, timeWindow, keyGenerator… Per-route config is passed via `config.rateLimit` …' }],
+    [20, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Read', tool_input: { file_path: P + 'src/middleware/logger.ts' } }],
+    [23, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Read', tool_input: { file_path: P + 'src/routes/orders.ts' } }],
+    [24, 'PostToolUse', 'ag-web', 'general-purpose', { tool_name: 'WebFetch', tool_input: { url: 'https://fastify.dev/docs/latest/Reference/Middleware/', prompt: 'How are hooks vs middleware ordered?' }, tool_response: 'Fastify runs onRequest hooks before preHandler…' }],
+    [26, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Read', tool_input: { file_path: P + 'tests/orders.test.ts' } }],
+    [28, 'PostToolUse', 'ag-web', 'general-purpose', { tool_name: 'WebSearch', tool_input: { query: '@fastify/rate-limit keyGenerator example', mode: 'standard' }, results: ['https://github.com/fastify/fastify-rate-limit#options', 'https://www.npmjs.com/package/@fastify/rate-limit', 'https://stackoverflow.com/questions/74012345', 'https://github.com/fastify/fastify-rate-limit/issues/210'] }],
+    [30, 'PostToolUse', 'ag-explore', 'Explore', { tool_name: 'Read', tool_input: { file_path: P + 'package.json' } }],
+    [31, 'PostToolUse', 'ag-web', 'general-purpose', { tool_name: 'WebFetch', tool_input: { url: 'https://github.com/fastify/fastify-rate-limit/issues/210', prompt: 'What was the keyGenerator bug?' }, tool_response: 'Issue #210: keyGenerator receives the raw request; async generators were not awaited before v8.0.1…' }],
+    [33, 'SubagentStop', 'ag-explore', 'Explore', { last_assistant_message: 'ミドルウェアは src/middleware/ に 2 つ。レート制限の既存実装は無し。' }],
+    [36, 'SubagentStop', 'ag-web', 'general-purpose', { last_assistant_message: '@fastify/rate-limit v9 を推奨。route 単位は config.rateLimit で指定。' }],
+    [38, 'PostToolUse', null, null, { tool_name: 'mcp__github__search_issues', tool_input: { q: 'rate limit repo:acme/shop-api' }, mcp_server: { name: 'github', source: 'project' }, tool_response: [{ type: 'text', text: '2 issues: #41 "429 on burst", #57 "per-user limits"' }] }],
+    [41, 'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'src/middleware/auth.ts' } }],
+    [43, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'grep -n "register(" src/app.ts src/routes/orders.ts', description: 'Find plugin registration points' }, tool_response: { stdout: 'src/app.ts:12:app.register(auth)\nsrc/routes/orders.ts:4:app.register(ordersRoutes)', stderr: '', interrupted: false } }],
+    [44, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'npm install @fastify/rate-limit', description: 'Install rate limit plugin' }, tool_response: { stdout: 'added 3 packages in 2s', stderr: '', interrupted: false } }],
+    [48, 'PostToolUse', null, null, { tool_name: 'Write', tool_input: { file_path: P + 'src/middleware/rateLimit.ts', content: "import rateLimit from '@fastify/rate-limit';\nexport const rateLimitPlugin = …" }, tool_response: { type: 'create', filePath: P + 'src/middleware/rateLimit.ts' } }],
+    [51, 'PostToolUse', null, null, { tool_name: 'Edit', tool_input: { file_path: P + 'src/routes/orders.ts', old_string: 'preHandler: [auth]', new_string: 'preHandler: [auth], config: { rateLimit: { max: 20, timeWindow: "1 minute" } }' } }],
+    [53, 'PostToolUse', null, null, { tool_name: 'Edit', tool_input: { file_path: P + 'src/app.ts', old_string: 'app.register(auth)', new_string: 'app.register(auth)\napp.register(rateLimitPlugin)' } }],
+    [55, 'PostToolUse', null, null, { tool_name: 'Write', tool_input: { file_path: P + 'tests/rateLimit.test.ts', content: "test('returns 429 after 20 requests', …" } }],
+    [57, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'npm test -- tests/rateLimit.test.ts', description: 'Run the new test' }, tool_response: { stdout: 'FAIL tests/rateLimit.test.ts\n  expected 429, got 200', stderr: '', interrupted: false } }],
+    [64, 'PostToolUse', null, null, { tool_name: 'Edit', tool_input: { file_path: P + 'src/middleware/rateLimit.ts', old_string: 'global: true', new_string: 'global: false' } }],
+    [60, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: "sed -n '1,30p' tests/orders.test.ts", description: 'Peek at the existing test setup' }, tool_response: { stdout: "import { build } from '../src/app';\ntest('creates an order', …", stderr: '', interrupted: false } }],
+    [66, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'npm test', description: 'Run all tests' }, tool_response: { stdout: 'Tests: 14 passed, 14 total', stderr: '', interrupted: false } }],
+    [72, 'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'CLAUDE.md' } }],
+    [74, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'git status && git diff --stat', description: 'Show changes' }, tool_response: { stdout: ' src/app.ts | 1 +\n src/routes/orders.ts | 2 +-\n 4 files changed', stderr: '', interrupted: false } }],
+    [76, 'Stop', null, null, {}],
+    [84, 'UserPromptSubmit', null, null, { prompt: 'README にレート制限の設定方法を書いて' }],
+    [86, 'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'README.md' } }],
+    [88, 'PostToolUse', null, null, { tool_name: 'Read', tool_input: { file_path: P + 'src/middleware/rateLimit.ts' } }],
+    [91, 'PostToolUse', null, null, { tool_name: 'WebFetch', tool_input: { url: 'https://github.com/fastify/fastify-rate-limit#options', prompt: 'List the option names' }, tool_response: 'max, timeWindow, keyGenerator, allowList, …' }],
+    [95, 'PostToolUse', null, null, { tool_name: 'Edit', tool_input: { file_path: P + 'README.md', old_string: '## 設定', new_string: '## 設定\n\n### レート制限\n…' } }],
+    [97, 'PostToolUse', null, null, { tool_name: 'Skill', tool_input: { skill: 'commit' } }],
+    [99, 'PostToolUse', null, null, { tool_name: 'Bash', tool_input: { command: 'git add -A && git commit -m "feat(orders): add rate limit"', description: 'Commit' }, tool_response: { stdout: '[main 9c1e2f4] feat(orders): add rate limit\n 5 files changed', stderr: '', interrupted: false } }],
+    [101, 'Stop', null, null, {}],
+  ];
+  const EXISTING = new Set(['src/config.ts', 'src/app.ts', 'src/routes/orders.ts', 'tests/orders.test.ts', 'package.json', 'README.md', 'CLAUDE.md']);
+
+  // ---- グラフ ----
+  const AG = () => [0, 1, 2, 3, 4, 5].map(i => css('--a' + i));
+  let AGC = AG();
+  const pieStyle = {}; for (let i = 1; i <= 6; i++) { pieStyle['pie-' + i + '-background-color'] = 'data(c' + i + ')'; pieStyle['pie-' + i + '-background-size'] = 'data(s' + i + ')'; }
+  const cy = cytoscape({
+    container: document.getElementById('cy'),
+    wheelSensitivity: 0.2, boxSelectionEnabled: false,
+    style: [
+      { selector: 'node', style: { 'label': 'data(label)', 'font-family': 'IBM Plex Mono, monospace', 'font-size': 10, 'color': C.fg, 'text-valign': 'center', 'text-halign': 'right', 'text-margin-x': 6, 'background-color': 'data(color)', 'width': 13, 'height': 13, 'border-width': 0, 'border-color': C.hot, 'transition-property': 'border-width', 'transition-duration': '250ms' } },
+      { selector: 'node[side="left"]', style: { 'text-halign': 'left', 'text-margin-x': -6 } },
+      { selector: 'node[res]', style: Object.assign({ 'pie-size': '100%', 'border-width': 1.5, 'border-color': 'data(color)' }, pieStyle) },
+      { selector: 'node[kind="agent"]', style: { 'shape': 'round-hexagon', 'width': 30, 'height': 30, 'background-color': 'data(acolor)', 'font-family': 'IBM Plex Sans JP, sans-serif', 'font-size': 11, 'font-weight': 500, 'text-valign': 'bottom', 'text-halign': 'center', 'text-margin-x': 0, 'text-margin-y': 5, 'text-wrap': 'wrap', 'text-max-width': 260, 'text-justification': 'center' } },
+      { selector: 'node[kind="agent"][main]', style: { 'width': 40, 'height': 40 } },
+      { selector: 'node[kind="query"]', style: { 'shape': 'diamond', 'width': 16, 'height': 16 } },
+      { selector: 'node[kind="mcp"]', style: { 'shape': 'round-rectangle', 'width': 14, 'height': 14 } },
+      { selector: 'node[kind="cmd"]', style: { 'shape': 'round-tag', 'width': 14, 'height': 12 } },
+      { selector: 'node[kind="result"]', style: { 'width': 9, 'height': 9, 'font-size': 9, 'pie-size': '0%', 'background-color': C.query, 'background-opacity': 0.35, 'border-width': 1.5, 'border-color': C.query } },
+      { selector: 'node[kind="group"]', style: { 'shape': 'round-rectangle', 'background-color': C.group, 'background-opacity': 0.55, 'border-width': 1, 'border-color': C.line, 'padding': '10px', 'text-valign': 'top', 'text-halign': 'center', 'text-margin-x': 0, 'text-margin-y': -3, 'font-size': 10, 'color': C.muted, 'font-weight': 500 } },
+      { selector: 'node[kind="group"][dir]', style: { 'text-halign': 'left' } },
+      { selector: 'node[kind="lane"]', style: { 'shape': 'round-rectangle', 'background-color': C.group, 'background-opacity': 0.18, 'border-width': 1, 'border-color': C.line, 'padding': '18px', 'text-valign': 'top', 'text-halign': 'center', 'text-margin-x': 0, 'text-margin-y': -6, 'font-family': 'IBM Plex Sans JP, sans-serif', 'font-size': 12, 'font-weight': 600, 'color': 'data(acolor)' } },
+      { selector: 'node[kind="anchor"]', style: { 'width': 1, 'height': 1, 'opacity': 0, 'label': '', 'events': 'no' } },
+      { selector: 'node.ended', style: { 'background-opacity': 0.35, 'border-width': 1, 'border-color': 'data(acolor)', 'border-style': 'dashed' } },
+      { selector: 'node[kind="lane"].ended', style: { 'border-style': 'dashed' } },
+      { selector: 'node.hidden', style: { 'display': 'none' } },
+      { selector: 'edge', style: { 'width': 1.2, 'line-color': 'data(color)', 'curve-style': 'taxi', 'taxi-direction': 'horizontal', 'taxi-turn': '50%', 'taxi-turn-min-distance': 24, 'target-arrow-shape': 'none', 'transition-property': 'width', 'transition-duration': '250ms' } },
+      { selector: 'edge[guess]', style: { 'line-style': 'dashed', 'line-dash-pattern': [4, 3] } },
+      { selector: 'edge.hidden', style: { 'display': 'none' } },
+      { selector: 'edge.dim', style: { 'line-color': C.muted, 'width': 0.8, 'line-style': 'solid' } },
+      { selector: 'node[res].dim', style: { 'pie-size': '0%', 'background-color': C.muted, 'background-opacity': 0.5 } },
+      { selector: 'node[kind="agent"].dim', style: { 'background-color': C.muted } },
+      { selector: 'node:selected', style: { 'border-width': 3, 'border-color': C.agent } },
+      { selector: 'node.now', style: { 'border-width': 4, 'border-color': 'data(nowColor)', 'width': 20, 'height': 20, 'z-index': 98 } },
+      { selector: 'edge.now', style: { 'width': 3.2, 'z-index': 98 } },
+      { selector: 'node[kind="agent"].now', style: { 'width': 44, 'height': 44 } },
+      { selector: '.pulse', style: { 'border-width': 5, 'border-color': C.hot, 'width': 3.2, 'z-index': 99 } },
+      { selector: 'node.pulse', style: { 'width': 22, 'height': 22 } },
+      { selector: 'node.twin', style: { 'border-width': 4, 'border-color': C.query, 'width': 18, 'height': 18 } },
+    ],
+    layout: { name: 'preset' },
+  });
+
+  // ---- 2 つの表示方式: map（1 枚地図。対象は 1 ノード、塗りで主体を示す）/ lanes（主体ごとの帯）----
+  let view = 'map';
+  const agents = {};                       // id -> { type, spawnedAt, color, left:[], right:[] }
+  const cols = { left: [], right: [] };    // map 用の列
+  const ROW = 24, HEAD = 18, PAD = 10, GAP = 26, LANE_HEAD = 30, LANE_GAP = 56, COL_X = 300, ANCHOR_X = 560, AG_GAP = 105;
+  const laneId = (a) => 'lane|' + a;
+  const nk = (a, res) => (view === 'lanes' ? a + '|' + res : res);
+  const gk = (a, gid) => (view === 'lanes' ? a + '|' + gid : gid);
+  function groupOf(kind, full) {
+    if (kind === 'file') { const rel = full.startsWith(P) ? full.slice(P.length) : full; const i = rel.lastIndexOf('/'); const dir = i < 0 ? '' : rel.slice(0, i); return { gid: 'dir:' + dir, label: 'shop-api/' + (dir ? dir + '/' : ''), col: 'right', dir: 1 }; }
+    if (kind === 'url' || kind === 'result') { const host = full.replace(/^https?:\/\//, '').split('/')[0]; return { gid: 'dom:' + host, label: host, col: 'left', dir: 0 }; }
+    if (kind === 'query') return { gid: 'grp:search', label: '検索', col: 'left', dir: 0 };
+    return { gid: 'grp:tools', label: 'コマンド / MCP / Skill', col: 'left', dir: 0 };
+  }
+  function ensureGroup(a, g) {
+    const id = gk(a, g.gid); let n = cy.getElementById(id);
+    if (n.empty()) {
+      const data = { id, kind: 'group', label: g.label, color: C.group, dir: g.dir, col: g.col, lane: a, last: simT, first: simT, count: 0, full: g.label, members: [] };
+      if (view === 'lanes') data.parent = laneId(a);
+      n = cy.add({ group: 'nodes', data }); (view === 'lanes' ? agents[a] : cols)[g.col].push(id);
+    }
+    return n;
+  }
+  function relayout(animate) {
+    const pos = {};
+    const colH = (ids) => ids.reduce((h, id) => h + HEAD + PAD * 2 + Math.max(1, cy.getElementById(id).data('members').length) * ROW + GAP, 0) - (ids.length ? GAP : 0);
+    const stack = (ids, x, side, y0) => { let y = y0; ids.forEach(id => { const m = cy.getElementById(id).data('members'); y += HEAD + PAD; if (m.length === 0) pos[id] = { x, y: y + ROW / 2 }; m.forEach((mid, i) => { pos[mid] = { x, y: y + i * ROW + ROW / 2 }; cy.getElementById(mid).data('side', side); }); y += Math.max(1, m.length) * ROW + PAD + GAP; }); };
+    const ids = Object.keys(agents);
+    if (view === 'map') {
+      const hL = colH(cols.left), hR = colH(cols.right);
+      stack(cols.left, -COL_X, 'left', -hL / 2); stack(cols.right, COL_X, 'right', -hR / 2);
+      const ah = (ids.length - 1) * AG_GAP; ids.forEach((id, i) => { pos[id] = { x: 0, y: -ah / 2 + i * AG_GAP }; });
+    } else {
+      let yTop = 0;
+      ids.forEach(a => {
+        const L = agents[a]; const hL = colH(L.left), hR = colH(L.right); const h = Math.max(hL, hR, 110); const y0 = yTop + LANE_HEAD;
+        stack(L.left, -COL_X, 'left', y0 + (h - hL) / 2); stack(L.right, COL_X, 'right', y0 + (h - hR) / 2);
+        pos[a] = { x: 0, y: y0 + h / 2 - 8 }; pos['anchorL|' + a] = { x: -ANCHOR_X, y: y0 + h / 2 }; pos['anchorR|' + a] = { x: ANCHOR_X, y: y0 + h / 2 };
+        yTop += LANE_HEAD + h + LANE_GAP;
+      });
+    }
+    cy.batch(() => { for (const id in pos) { const n = cy.getElementById(id); if (n.empty()) continue; n.stop(true); if (animate) n.animate({ position: pos[id] }, { duration: 260, easing: 'ease-out' }); else n.position(pos[id]); } });
+    return pos;
+  }
+  function laneLabel(a) { const A = agents[a]; const ended = cy.getElementById(a).hasClass('ended'); return (a === 'main' ? 'main' : A.type + '  ← main が ' + A.spawnedAt.toFixed(0) + 's に起動') + (ended ? '  (done)' : ''); }
+  function addAgent(id, type, main, at) {
+    const i = Object.keys(agents).length; const color = AGC[i % AGC.length];
+    agents[id] = { type, spawnedAt: at == null ? simT : at, color, left: [], right: [] };
+    if (view === 'lanes') {
+      cy.add({ group: 'nodes', data: { id: laneId(id), kind: 'lane', label: '', color: C.group, acolor: color, last: simT, count: 0, full: type } });
+      cy.add([{ group: 'nodes', data: { id: 'anchorL|' + id, kind: 'anchor', label: '', color: C.group, parent: laneId(id) }, position: { x: -ANCHOR_X, y: 0 } },
+              { group: 'nodes', data: { id: 'anchorR|' + id, kind: 'anchor', label: '', color: C.group, parent: laneId(id) }, position: { x: ANCHOR_X, y: 0 } }]);
+    }
+    const data = { id, kind: 'agent', label: main ? 'main' : type, color, acolor: color, main: main ? 1 : 0, last: simT, count: 0, first: simT, full: (main ? 'main' : type) + ' (' + id + ')' };
+    if (view === 'lanes') data.parent = laneId(id);
+    cy.add({ group: 'nodes', data, position: { x: 0, y: 0 } });
+    if (view === 'lanes') cy.getElementById(laneId(id)).data('label', laneLabel(id));
+    renderAgents(); renderTabs(); relayout(true);
+  }
+  function short(p) { return p.startsWith(P) ? p.slice(P.length) : p.replace(/^https?:\/\//, ''); }
+  function base(p) { return p.replace(/\/$/, '').split('/').pop() || p; }
+  function sameRes(res) { return cy.nodes().filter(n => n.data('res') === res); }
+  function agentsOf(n) { return [...new Set(n.connectedEdges('[kind="access"]').map(e => e.source().id()))]; }
+  function paint(n) {
+    const ags = view === 'map' ? agentsOf(n) : [...new Set(sameRes(n.data('res')).flatMap(x => agentsOf(x)))];
+    const own = view === 'map' ? ags : agentsOf(n);
+    for (let i = 1; i <= 6; i++) { const a = own[i - 1]; n.data('c' + i, a ? agents[a].color : C.muted); n.data('s' + i, a ? 100 / own.length : 0); }
+    const cmds = n.data('cmds') || [];
+    n.data('label', n.data('base') + (cmds.length ? '  (' + cmds.join(', ') + ')' : '') + (ags.length > 1 ? '  ◈' + ags.length : ''));
+  }
+  function touch(a, res, kind, label, opt) {
+    opt = opt || {}; const id = nk(a, res);
+    let n = cy.getElementById(id);
+    if (n.empty()) {
+      const g = ensureGroup(a, groupOf(kind, opt.full || label));
+      const data = { id, res, lane: a, kind, label, base: label, color: C[kind], last: simT, first: simT, count: 0, full: opt.full || label, results: opt.results || null, expanded: 0, parent: g.id(), side: 'right', cmds: [] };
+      for (let i = 1; i <= 6; i++) { data['c' + i] = C.muted; data['s' + i] = 0; }
+      n = cy.add({ group: 'nodes', data, position: { x: g.position('x'), y: g.position('y') } });
+      g.data('members').push(id);
+    }
+    const g = n.parent(); g.data('last', simT); g.data('count', g.data('count') + 1);
+    n.data('last', simT); n.data('count', n.data('count') + 1);
+    if (opt.cmd && !n.data('cmds').includes(opt.cmd)) n.data('cmds').push(opt.cmd);
+    const eid = 'e|' + a + '|' + id; let e = cy.getElementById(eid);
+    if (e.empty()) e = cy.add({ group: 'edges', data: { id: eid, source: a, target: id, kind: 'access', color: agents[a].color, last: simT, count: 0, guess: opt.guess ? 1 : 0, tools: [] } });
+    e.data('last', simT); e.data('count', e.data('count') + 1); e.data('tools').push(opt.tool || kind);
+    const ag = cy.getElementById(a); ag.data('last', simT); ag.data('count', ag.data('count') + 1);
+    sameRes(res).forEach(paint); applyFilters(); applyFocus(); return n;
+  }
+  function touchDir(a, dirPath, tool, pattern) {
+    const rel = dirPath.startsWith(P) ? dirPath.slice(P.length) : dirPath; const dir = rel.replace(/\/$/, '');
+    const g = ensureGroup(a, { gid: 'dir:' + dir, label: 'shop-api/' + (dir ? dir + '/' : ''), col: 'right', dir: 1 });
+    g.data('last', simT); g.data('count', g.data('count') + 1);
+    const eid = 'e|' + a + '|' + g.id(); let e = cy.getElementById(eid);
+    if (e.empty()) e = cy.add({ group: 'edges', data: { id: eid, source: a, target: g.id(), kind: 'access', color: agents[a].color, last: simT, count: 0, guess: 0, tools: [] } });
+    e.data('last', simT); e.data('count', e.data('count') + 1); e.data('tools').push(tool + ' ' + pattern);
+    const ag = cy.getElementById(a); ag.data('last', simT); ag.data('count', ag.data('count') + 1);
+    applyFocus(); return g;
+  }
+  function expandQuery(n) {
+    if (n.data('expanded')) return; n.data('expanded', 1); const a = n.data('lane');
+    (n.data('results') || []).forEach(u => {
+      const res = 'url:' + u, id = nk(a, res); let m = cy.getElementById(id);
+      if (m.empty()) { const g = ensureGroup(a, groupOf('result', u)); const lab = u.replace(/^https?:\/\/[^/]+/, '') || '/'; const data = { id, res, lane: a, kind: 'result', label: lab, base: lab, color: C.result, last: n.data('last'), first: n.data('last'), count: 0, full: u, parent: g.id(), side: 'left', fromQuery: n.id() }; for (let i = 1; i <= 6; i++) { data['c' + i] = C.muted; data['s' + i] = 0; } m = cy.add({ group: 'nodes', data, position: { x: g.position('x'), y: g.position('y') } }); g.data('members').push(id); }
+      m.addClass('twin');
+    });
+    n.data('base', n.data('full')); paint(n); applyFilters(); relayout(true);
+  }
+
+  // ---- イベント適用（silent: 表示切替の再構築時。右ペインは触らない）----
+  const who = (agentId) => agentId || 'main';
+  function hookJson(ev) {
+    const [t, name, agentId, agentType, d] = ev;
+    const j = { hook_event_name: name, session_id: SID, cwd: P.replace(/\/$/, ''), transcript_path: '~/.claude/projects/-home-user-proj-shop-api/' + SID + '.jsonl', t_sim: t };
+    if (agentId) { j.agent_id = agentId; j.agent_type = agentType; }
+    for (const k in d) if (k !== 'results') j[k] = d[k];
+    if (d.results) j.tool_response = 'Web search results for query: "' + d.tool_input.query + '"\n\nLinks: ' + JSON.stringify(d.results.map(u => ({ title: base(u), url: u }))) + '\n\n…';
+    if (name === 'PostToolUse') { j.tool_use_id = 'toolu_01' + Math.abs(hash(name + t + (d.tool_name || ''))).toString(36).padStart(8, '0'); j.duration_ms = 40 + (Math.abs(hash(String(t))) % 900); }
+    return j;
+  }
+  function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
+  const evRefs = {};   // イベント番号 -> 対象の res / group の一覧（ノード→イベントの逆引き用）
+  function apply(ev, silent, i) {
+    const [t, name, agentId, agentType, d] = ev; const a = who(agentId); let targets = [];
+    const F = silent ? () => {} : (ev2, lab, tool, text, kind, tg) => { evRefs[i] = tg.map(n => (typeof n === 'string' ? 'agent:' + n : (n.data('res') || 'group:' + (n.id().includes('|') ? n.id().split('|')[1] : n.id())))); feed(ev2, lab, tool, text, kind, tg, i); };
+    if (name === 'UserPromptSubmit') { if (!silent) { turnNo += 1; document.getElementById('turn').innerHTML = '<b>turn ' + turnNo + '</b><br>' + esc(d.prompt); } F(ev, 'user', 'prompt', d.prompt, 'muted', []); return; }
+    if (name === 'SubagentStart') { addAgent(agentId, agentType, false, t); F(ev, 'main', 'Agent', agentType + ' を起動', 'agent', [agentId]); return; }
+    if (name === 'SubagentStop') { cy.getElementById(agentId).addClass('ended'); if (view === 'lanes') cy.getElementById(laneId(agentId)).addClass('ended').data('label', laneLabel(agentId)); markNow(agentId, [], ''); F(ev, agentType, 'Stop', '完了', 'agent', [agentId]); renderAgents(); return; }
+    if (name === 'Stop') { markNow('main', [], ''); F(ev, 'main', 'Stop', 'ターン終了', 'muted', ['main']); return; }
+    const tool = d.tool_name, inp = d.tool_input;
+    if (['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(tool)) { targets = [touch(a, 'file:' + inp.file_path, 'file', base(inp.file_path), { tool, full: inp.file_path })]; F(ev, a, tool, short(inp.file_path), 'file', targets); }
+    else if (tool === 'Glob' || tool === 'Grep') { const dir = inp.path || P; targets = [touchDir(a, dir, tool, inp.pattern)]; F(ev, a, tool, inp.pattern + '  in ' + (short(dir) || '.'), 'file', targets); }
+    else if (tool === 'Bash') {
+      // ファイルを参照するコマンド（cat/sed/grep 等）はコマンドのノードを作らず、主体→ファイルの破線にコマンド全文を持たせる
+      const cmdName = inp.command.trim().split(/\s+/)[0];
+      const files = inp.command.split(/[\s|&;]+/).filter(tok => EXISTING.has(tok));
+      if (files.length) files.forEach(tok => targets.push(touch(a, 'file:' + P + tok, 'file', base(tok), { tool: 'Bash(推定): ' + inp.command, full: P + tok, guess: true, cmd: cmdName })));
+      else targets = [touch(a, 'cmd:' + cmdName, 'cmd', cmdName, { tool: 'Bash: ' + inp.command, full: inp.command })];
+      F(ev, a, 'Bash', inp.command, 'cmd', targets);
+    }
+    else if (tool === 'WebFetch') { targets = [touch(a, 'url:' + inp.url, 'url', inp.url.replace(/^https?:\/\/[^/]+/, '') || '/', { tool, full: inp.url })]; F(ev, a, 'WebFetch', short(inp.url), 'url', targets); }
+    else if (tool === 'WebSearch') { const n = touch(a, 'q:' + inp.query, 'query', '"' + inp.query + '"  +' + (d.results || []).length, { tool, full: '"' + inp.query + '"', results: d.results }); targets = [n]; F(ev, a, 'WebSearch', inp.query + '  (+' + (d.results || []).length + ')', 'query', targets); }
+    else if (tool.startsWith('mcp__')) { const s = d.mcp_server.name; targets = [touch(a, 'mcp:' + s, 'mcp', 'mcp:' + s, { tool, full: tool })]; F(ev, a, 'MCP', tool, 'mcp', targets); }
+    else if (tool === 'Skill') { targets = [touch(a, 'skill:' + inp.skill, 'mcp', '/' + inp.skill, { tool, full: 'Skill ' + inp.skill })]; F(ev, a, 'Skill', '/' + inp.skill, 'mcp', targets); }
+    const nowText = tool === 'Bash' ? 'Bash ' + inp.command.slice(0, 40) : tool === 'WebFetch' ? 'WebFetch ' + short(inp.url).slice(0, 40) : tool === 'WebSearch' ? 'WebSearch "' + inp.query.slice(0, 32) + '"' : inp.file_path ? tool + ' ' + short(inp.file_path) : inp.pattern ? tool + ' ' + inp.pattern : tool;
+    markNow(a, targets, nowText);
+    if (!silent) relayout(true);
+  }
+
+  // ---- 「いま」: 主体ごとに最新のイベント 1 件を光らせ、主体ラベルの 2 行目に内容を出す。次のイベントで移る ----
+  function markNow(a, targets, text) {
+    cy.batch(() => {
+      cy.elements('.now').filter(el => (el.isNode() ? (el.data('kind') === 'agent' ? el.id() === a : el.data('nowBy') === a) : el.source().id() === a)).removeClass('now');
+      const ag = cy.getElementById(a); ag.addClass('now');
+      targets.forEach(n => { if (!n || n.empty || n.empty()) return; n.data('nowColor', agents[a].color); n.data('nowBy', a); n.addClass('now'); const e = cy.getElementById('e|' + a + '|' + n.id()); if (e.nonempty()) e.addClass('now'); });
+      agents[a].now = text; ag.data('label', (a === 'main' ? 'main' : agents[a].type) + (text ? '\n' + text : ''));
+    });
+  }
+  function tick() { document.getElementById('clock').textContent = 't=' + simT.toFixed(1) + 's'; }
+
+  // ---- フィルタ・絞り込み ----
+  const filters = { file: 'f-file', url: 'f-url', query: 'f-query', mcp: 'f-mcp', cmd: 'f-cmd' };
+  function applyFilters() {
+    const on = {}; for (const k in filters) on[k] = document.getElementById(filters[k]).checked;
+    on.result = on.url; const guess = document.getElementById('f-guess').checked;
+    cy.batch(() => {
+      cy.nodes().forEach(n => { const k = n.data('kind'); if (k !== 'agent' && k !== 'group' && k !== 'lane' && k !== 'anchor') n.toggleClass('hidden', !on[k]); });
+      cy.nodes('[kind="file"]').forEach(n => { if (on.file && !guess && n.connectedEdges('[kind="access"]').every(e => e.data('guess'))) n.addClass('hidden'); });
+      cy.nodes('[kind="group"]').forEach(g => g.toggleClass('hidden', g.children().length > 0 && g.children().every(c => c.hasClass('hidden'))));
+      cy.edges().forEach(e => { e.toggleClass('hidden', e.source().hasClass('hidden') || e.target().hasClass('hidden') || (e.data('guess') && !guess)); });
+    });
+  }
+  function applyFocus() {
+    cy.batch(() => {
+      if (tabSel === 'all') { cy.elements().removeClass('dim'); return; }
+      cy.edges().forEach(e => e.toggleClass('dim', e.source().id() !== tabSel));
+      cy.nodes('[res]').forEach(n => n.toggleClass('dim', !n.connectedEdges('[kind="access"]').some(e => e.source().id() === tabSel)));
+      cy.nodes('[kind="agent"]').forEach(n => n.toggleClass('dim', n.id() !== tabSel));
+    });
+  }
+  function syncGuess() { const on = document.getElementById('f-file').checked; document.getElementById('f-guess').disabled = !on; document.getElementById('l-guess').classList.toggle('off', !on); }
+  document.querySelectorAll('footer input[type="checkbox"]').forEach(el => el.addEventListener('change', () => { syncGuess(); applyFilters(); }));
+
+  // ---- 表示切替: グラフだけを作り直す（右ペインは保持）----
+  function rebuild() {
+    cy.elements().remove(); for (const k in agents) delete agents[k]; cols.left = []; cols.right = [];
+    addAgent('main', 'main', true, 0);
+    for (let i = 0; i < idx; i++) apply(EV[i], true, i);
+    cy.nodes().stop(true); relayout(false); renderAgents(); renderTabs(); applyFilters(); applyFocus(); cy.fit(undefined, 30);
+  }
+  document.getElementById('view').addEventListener('change', e => { view = e.target.value; rebuild(); });
+
+  // ---- 右ペイン: イベント列・主体タブ・詳細 ----
+  const feedEl = document.getElementById('feed'); let tabSel = 'all';
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function feed(ev, agentLabel, tool, text, kind, targets, i) {
+    const div = document.createElement('div'); div.className = 'ev new'; div.tabIndex = 0; div.dataset.i = i;
+    const agentKey = ev[2] || 'main'; div.dataset.agent = agentKey;
+    const col = kind === 'agent' ? 'var(--accent)' : kind === 'muted' ? 'var(--muted)' : 'var(--c-' + kind + ')';
+    const sw = agents[agentKey] ? agents[agentKey].color : 'var(--muted)';
+    div.innerHTML = '<div class="t">' + ev[0].toFixed(0) + 's</div><div><div class="who" style="color:' + sw + '">' + esc(agentLabel) + '</div><div class="what" style="--dot:' + col + '"><i>' + esc(tool) + '</i> ' + esc(text) + '</div></div>';
+    const resIds = targets.map(n => (typeof n === 'string' ? { a: n } : { res: n.data('res'), gid: n.data('kind') === 'group' ? n.id() : null }));
+    div.addEventListener('click', () => selectEvent(div, ev, resIds));
+    div.addEventListener('keydown', e => { if (e.key === 'Enter') div.click(); });
+    if (tabSel !== 'all' && tabSel !== agentKey) div.classList.add('hide');
+    feedEl.prepend(div); while (feedEl.children.length > 80) feedEl.lastChild.remove();
+  }
+  function resolveTargets(agentId, refs) {
+    // 表示方式が変わっても同じ対象を見つけられるよう、res / group から現在のノードを引く
+    return cy.collection(refs.map(r => {
+      if (r.a) return cy.getElementById(r.a);
+      if (r.res) { const c = sameRes(r.res); return c.filter(n => view === 'map' || n.data('lane') === agentId)[0] || c[0]; }
+      if (r.gid) { const g = r.gid.includes('|') ? r.gid.split('|')[1] : r.gid; return cy.getElementById(gk(agentId, g)); }
+      return null;
+    }).filter(n => n && n.nonempty && n.nonempty()));
+  }
+  function selectEvent(div, ev, refs) {
+    clearFocus(); div.classList.add('sel');
+    const [, name, agentId, agentType, d] = ev; const aid = agentId || 'main'; const agentNode = cy.getElementById(aid);
+    const nodes = resolveTargets(aid, refs);
+    const edges = nodes.connectedEdges().filter(e => e.source().id() === aid);
+    nodes.addClass('pulse'); edges.addClass('pulse'); agentNode.addClass('pulse');
+    cy.animate({ fit: { eles: nodes.union(agentNode), padding: 120 } }, { duration: 350 });
+    const where = nodes.map(n => { const g = n.data('kind') === 'group' ? n : n.parent(); return (g.nonempty() && g.id() !== n.id() ? g.data('label') : '') + (n.data('base') || n.data('label')); });
+    document.getElementById('detail').innerHTML = '<div class="kind">イベント · ' + esc(name) + (d.tool_name ? ' · ' + esc(d.tool_name) : '') + ' · <span style="color:' + (agents[aid] ? agents[aid].color : 'inherit') + '">' + esc(agentId ? agentType : 'main') + '</span></div>'
+      + (where.length ? '<div class="row"><span>対象</span><b>' + esc(where.join(' / ')) + '</b></div>' : '')
+      + '<pre>' + esc(JSON.stringify(hookJson(ev), null, 2)) + '</pre>';
+  }
+  function renderTabs() {
+    const el = document.getElementById('tabs'); const keys = ['all', ...Object.keys(agents)];
+    el.innerHTML = keys.map(k => '<button class="tab' + (tabSel === k ? ' on' : '') + '" data-k="' + k + '"' + (k !== 'all' ? ' style="' + (tabSel === k ? 'color:' + agents[k].color + ';border-color:' + agents[k].color : '') + '"' : '') + '>' + (k === 'all' ? 'すべて' : esc(k === 'main' ? 'main' : agents[k].type)) + '</button>').join('');
+    el.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+      tabSel = b.dataset.k; renderTabs(); applyFocus();
+      feedEl.querySelectorAll('.ev').forEach(x => x.classList.toggle('hide', tabSel !== 'all' && x.dataset.agent !== tabSel));
+      if (tabSel !== 'all' && view === 'lanes') cy.animate({ fit: { eles: cy.getElementById(laneId(tabSel)), padding: 20 } }, { duration: 350 });
+    }));
+  }
+  function renderAgents() {
+    const el = document.getElementById('agents'); el.innerHTML = '';
+    Object.keys(agents).forEach(id => {
+      const n = cy.getElementById(id); const ended = n.hasClass('ended'); const A = agents[id];
+      el.insertAdjacentHTML('beforeend', '<div class="agent"><span class="sw" style="--sw:' + A.color + ';opacity:' + (ended ? .35 : 1) + '"></span>' + esc(A.type) + (id !== 'main' ? '<span class="lin">← main ' + A.spawnedAt.toFixed(0) + 's</span>' : '') + '<span class="st">' + (ended ? 'done' : 'live') + ' · ' + n.data('count') + '</span></div>');
+    });
+  }
+  function clearFocus() { cy.elements().removeClass('pulse twin'); feedEl.querySelectorAll('.ev.sel, .ev.rel').forEach(x => x.classList.remove('sel', 'rel')); }
+  cy.on('tap', e => { if (e.target === cy) { clearFocus(); document.getElementById('detail').innerHTML = '<div class="kind">ノードかイベントを選択すると詳細が出ます</div>'; } });
+  function relatedEvents(n) {
+    const d = n.data(); const key = d.kind === 'agent' ? 'agent:' + n.id() : d.kind === 'group' ? 'group:' + (n.id().includes('|') ? n.id().split('|')[1] : n.id()) : d.res;
+    const hits = [];
+    for (const i in evRefs) { const ev = EV[i]; const own = d.kind === 'agent' ? (ev[2] || 'main') === n.id() : evRefs[i].includes(key); if (own) hits.push(+i); }
+    return hits.sort((a, b) => a - b);
+  }
+  function focusFeed(hits) {
+    feedEl.querySelectorAll('.ev.rel').forEach(x => x.classList.remove('rel'));
+    hits.forEach(i => { const row = feedEl.querySelector('.ev[data-i="' + i + '"]'); if (row) row.classList.add('rel'); });
+    const last = hits.length ? feedEl.querySelector('.ev[data-i="' + hits[hits.length - 1] + '"]') : null;
+    if (last) last.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function evLine(i) {
+    const [t, name, agentId, , d] = EV[i]; const inp = d.tool_input || {};
+    const what = d.tool_name === 'Bash' ? inp.command : d.tool_name === 'WebFetch' ? inp.url : d.tool_name === 'WebSearch' ? '"' + inp.query + '"' : inp.file_path ? short(inp.file_path) : inp.pattern ? inp.pattern + ' in ' + short(inp.path || P) : inp.skill ? '/' + inp.skill : d.tool_name || name;
+    return '<li><span>' + t.toFixed(0) + 's</span><b>' + esc((d.tool_name || name) + '  ' + what) + '</b></li>';
+  }
+  cy.on('tap', 'edge', e => {
+    const ed = e.target; const d = ed.data(); if (d.kind !== 'access') return;
+    clearFocus(); ed.addClass('pulse'); ed.target().addClass('pulse');
+    const a = ed.source().id(); const tg = ed.target();
+    document.getElementById('detail').innerHTML = '<div class="kind">アクセス · <span style="color:' + agents[a].color + '">' + esc(agents[a].type) + '</span> → ' + esc(tg.data('base') || tg.data('label')) + (d.guess ? ' · 破線 = Bash からの推定' : '') + '</div>'
+      + '<div class="row"><span>回数</span><b>' + d.count + '</b></div><ul class="list">' + d.tools.map(t => '<li><span></span><b>' + esc(t) + '</b></li>').join('') + '</ul>';
+  });
+  cy.on('tap', 'node', e => {
+    const n = e.target; const d = n.data(); if (d.kind === 'anchor') return;
+    if (d.kind === 'query') expandQuery(n);
+    clearFocus(); n.addClass('pulse');
+    const same = d.res ? sameRes(d.res) : cy.collection(n); const tw = same.filter(x => x.id() !== n.id()); tw.addClass('twin');
+    // 関連イベント: 右ペインでフォーカス。同じイベントで一緒に触られた対象（例: cat が見たファイル）も点灯
+    const hits = relatedEvents(n); focusFeed(hits);
+    const key = d.res || ('group:' + n.id());
+    const co = [...new Set(hits.flatMap(i => evRefs[i]).filter(r => r !== key && !r.startsWith('agent:')))];
+    co.forEach(r => (r.startsWith('group:') ? cy.getElementById(gk(d.lane || 'main', r.slice(6))) : sameRes(r)).addClass('twin'));
+    const edges = same.connectedEdges('[kind="access"]');
+    const coLabel = co.map(r => r.startsWith('group:') ? r.slice(6) : (sameRes(r)[0] ? sameRes(r)[0].data('base') : r)).filter(Boolean);
+    const seen = edges.map(ed => { const a = ed.source().id(); return '<span style="color:' + agents[a].color + '">' + esc(agents[a].type) + '</span> ×' + ed.data('count') + ' (' + esc([...new Set(ed.data('tools'))].join(', ')) + ')'; });
+    const g = n.parent();
+    document.getElementById('detail').innerHTML = '<div class="kind">' + esc(d.kind === 'group' ? (d.dir ? 'ディレクトリ' : 'グループ') : d.kind === 'lane' ? 'レーン' : d.kind) + (d.kind === 'query' ? ' · クリックで結果を展開' : '') + (tw.length ? ' · 他の帯の同じ対象を点灯中' : '') + '</div><div class="label">' + esc(d.full || d.label) + '</div>'
+      + (g.nonempty() && g.data('kind') === 'group' ? '<div class="row"><span>場所</span><b>' + esc(g.data('label')) + '</b></div>' : '')
+      + (d.kind === 'group' ? '<div class="row"><span>要素数</span><b>' + n.children().length + '</b></div>' : '')
+      + '<div class="row"><span>アクセス回数</span><b>' + (d.count || 0) + '</b></div><div class="row"><span>最終</span><b>t=' + (d.last || 0).toFixed(0) + 's</b></div>'
+      + (seen.length ? '<div class="row"><span>見た主体</span><b>' + seen.join(' / ') + '</b></div>' : '')
+      + (coLabel.length ? '<div class="row"><span>' + (d.kind === 'cmd' ? '参照先（推定）' : '同時に触れた対象') + '</span><b>' + esc(coLabel.join(', ')) + '</b></div>' : '')
+      + (hits.length ? '<div class="row" style="margin-top:6px"><span>関連イベント</span><b>' + hits.length + ' 件（右下で強調）</b></div><ul class="list">' + hits.slice(-8).map(evLine).join('') + '</ul>' : '');
+  });
+
+  // ---- 追従（全体表示）: 新しい要素が画面外に出たとき、かつ利用者が 6 秒以上操作していないときだけ ----
+  let lastUserAt = -1e9;
+  cy.on('tap zoom pan dragfree', () => { lastUserAt = performance.now(); });
+  function followIfNeeded() {
+    if (!document.getElementById('f-follow').checked) return;
+    if (performance.now() - lastUserAt < 6000 || cy.elements('.pulse').nonempty()) return;
+    const bb = cy.elements().boundingBox(), ex = cy.extent();
+    const out = bb.x1 < ex.x1 || bb.x2 > ex.x2 || bb.y1 < ex.y1 || bb.y2 > ex.y2;
+    if (out) { cy.stop(true); cy.animate({ fit: { eles: cy.elements(), padding: 30 } }, { duration: 300 }); }
+  }
+
+  // ---- 再生 ----
+  let simT = 0, idx = 0, turnNo = 0, playing = true, lastReal = performance.now();
+  function start() {
+    cy.elements().remove(); for (const k in agents) delete agents[k]; cols.left = []; cols.right = [];
+    feedEl.innerHTML = ''; simT = 0; idx = 0; turnNo = 0; tabSel = 'all'; document.getElementById('turn').innerHTML = '';
+    document.getElementById('detail').innerHTML = '<div class="kind">ノードかイベントを選択すると詳細が出ます</div>';
+    addAgent('main', 'main', true, 0); cy.zoom(1); cy.center();
+  }
+  function frame(now) {
+    const dt = (now - lastReal) / 1000; lastReal = now;
+    if (playing) simT += dt * +document.getElementById('speed').value;
+    let applied = false;
+    while (idx < EV.length && EV[idx][0] <= simT) { apply(EV[idx], false, idx); idx += 1; applied = true; }
+    if (applied) followIfNeeded();
+    tick(); requestAnimationFrame(frame);
+  }
+  document.getElementById('play').addEventListener('click', e => { playing = !playing; e.target.textContent = playing ? '一時停止' : '再生'; });
+  document.getElementById('reset').addEventListener('click', start);
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { C = COLORS(); AGC = AG(); start(); });
+  start();
+  // #t<秒>[v] で指定時刻まで即時再生して停止（v = lanes なら主体別表示）。スクリーンショット／共有用
+  const m = /^#t(\d+)(lanes)?$/.exec(location.hash);
+  if (m) { if (m[2]) { view = 'lanes'; document.getElementById('view').value = 'lanes'; rebuild(); } simT = +m[1]; while (idx < EV.length && EV[idx][0] <= simT) { apply(EV[idx], false, idx); idx += 1; } cy.nodes().stop(true); relayout(false); playing = false; document.getElementById('play').textContent = '再生'; cy.fit(undefined, 30); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
