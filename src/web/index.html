@@ -44,9 +44,9 @@ aside.right { grid-area: right; border-left: 1px solid var(--line); background: 
 #cy, #g3d { position: absolute; inset: 0; }
 #g3d canvas { outline: none; }
 #cy[hidden], #g3d[hidden] { display: none; }
-.legend { position: absolute; left: 12px; top: 10px; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend { position: absolute; left: 12px; top: 10px; max-width: 56%; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--muted); pointer-events: none; }
 .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--dot); vertical-align: -1px; }
-.turn { position: absolute; right: 12px; top: 10px; font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: right; max-width: 46%; }
+.turn { position: absolute; right: 12px; top: 10px; font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: right; max-width: 38%; overflow-wrap: anywhere; }
 .turn b { color: var(--fg); font-weight: 500; }
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; padding: 12px 14px 6px; font-weight: 500; }
 .session { padding: 10px 14px; border-left: 3px solid transparent; cursor: pointer; }
@@ -64,6 +64,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: v
 .detail .kind { font-size: 11px; color: var(--muted); }
 .detail .label { font-family: var(--font-mono); font-size: 12px; word-break: break-all; margin: 3px 0 6px; }
 .detail .row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.detail .row > span { white-space: nowrap; }
 .detail .row b { color: var(--fg); font-weight: 500; text-align: right; }
 .detail pre { font-family: var(--font-mono); font-size: 10.5px; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 6px 0 0; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto; }
 .tabs { display: flex; gap: 4px; padding: 6px 14px 8px; flex-wrap: wrap; }
@@ -75,7 +76,7 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: v
 .ev.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .ev.rel { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .detail .list { font-family: var(--font-mono); font-size: 10.5px; margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; }
-.detail .list li { display: grid; grid-template-columns: 34px 1fr; gap: 6px; color: var(--muted); }
+.detail .list li { display: grid; grid-template-columns: max-content 1fr; gap: 6px; color: var(--muted); }
 .detail .list li b { color: var(--fg); font-weight: 400; word-break: break-all; }
 .ev.hide { display: none; }
 .ev .t { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
