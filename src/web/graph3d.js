@@ -148,5 +148,6 @@ export function createGraph3D({ model, ui, container }) {
       + (ns.length ? '<div class="row"><span>対象</span><b>' + esc(ns.map(n => (n.group && byId[n.group] ? byId[n.group].label : '') + (n.base || n.label)).join(' / ')) + '</b></div>' : '')
       + '<pre>' + esc(JSON.stringify(ev, null, 2)) + '</pre>');
   }
-  return { applyOps, reset, fit, setFilters, setFocus, selectEvent, counts, clearFocus };
+  function resize() { G.width(container.clientWidth).height(container.clientHeight); }
+  return { applyOps, reset, fit, resize, setFilters, setFocus, selectEvent, counts, clearFocus };
 }

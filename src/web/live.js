@@ -85,3 +85,24 @@ document.getElementById('view').addEventListener('change', e => switchView(e.tar
 document.getElementById('play').addEventListener('click', e => { paused = !paused; e.target.textContent = paused ? '再生' : '一時停止'; if (!paused) { const q = buffer.splice(0); bufferedEl.textContent = ''; q.forEach(handle); } });
 const initialView = new URLSearchParams(location.search).get('view'); if (initialView && initialView in views) { view = initialView; document.getElementById('view').value = view; }
 switchView(view);
+
+// ---- ペイン幅のドラッグ変更（左右の仕切り。幅は localStorage に残す。ダブルクリックで既定に戻す）----
+(function () {
+  const app = document.querySelector('.app'); const DEF = { left: 220, right: 320 };
+  const store = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* 無効なら覚えないだけ */ } };
+  const load = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch { return 0; } };
+  const apply = (side, w) => app.style.setProperty('--' + side + '-w', w + 'px');
+  for (const side of ['left', 'right']) { const w = load('gaze.' + side + 'W'); if (w) apply(side, w); }
+  document.querySelectorAll('.resizer').forEach(h => {
+    const side = h.dataset.side; h.title = 'ドラッグで幅を変える。ダブルクリックで元に戻す';
+    h.addEventListener('pointerdown', e => {
+      e.preventDefault(); try { h.setPointerCapture(e.pointerId); } catch { /* 合成イベント */ }
+      h.classList.add('on'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+      const move = ev => { const raw = side === 'left' ? ev.clientX : window.innerWidth - ev.clientX; const w = Math.min(Math.floor(window.innerWidth * 0.6), Math.max(160, Math.round(raw))); apply(side, w); store('gaze.' + side + 'W', w); if (renderer) renderer.resize(); };
+      const up = () => { h.removeEventListener('pointermove', move); h.classList.remove('on'); document.body.style.cursor = ''; document.body.style.userSelect = ''; if (renderer) renderer.resize(); };
+      h.addEventListener('pointermove', move); h.addEventListener('pointerup', up, { once: true }); h.addEventListener('pointercancel', up, { once: true });
+    });
+    h.addEventListener('dblclick', () => { apply(side, DEF[side]); store('gaze.' + side + 'W', ''); if (renderer) renderer.resize(); });
+  });
+  window.addEventListener('resize', () => { if (renderer) renderer.resize(); });
+})();

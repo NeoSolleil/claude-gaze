@@ -235,5 +235,6 @@ export function createGraph2D({ model, ui, container }) {
       + '<pre>' + esc(JSON.stringify(ev, null, 2)) + '</pre>');
   }
   window.gaze = Object.assign(window.gaze || {}, { cy });
-  return { applyOps, reset, fit, setMode, get mode() { return mode; }, setFilters, setFocus, selectEvent, counts, clearFocus };
+  function resize() { cy.resize(); }
+  return { applyOps, reset, fit, resize, setMode, get mode() { return mode; }, setFilters, setFocus, selectEvent, counts, clearFocus };
 }

@@ -19,7 +19,7 @@ export function createUI(model) {
       const div = document.createElement('div'); div.className = 'ev new'; div.tabIndex = 0; div.dataset.i = i; div.dataset.agent = f.agent;
       const col = f.kind === 'agent' ? 'var(--accent)' : f.kind === 'muted' ? 'var(--muted)' : 'var(--c-' + f.kind + ')';
       const sw = model.agents[f.agent] ? model.agents[f.agent].color : 'var(--muted)';
-      div.innerHTML = '<div class="t">' + clock(ev) + '</div><div><div class="who" style="color:' + sw + '">' + esc(f.agentLabel) + (f.failed ? ' <span style="color:var(--muted)">失敗</span>' : '') + '</div><div class="what" style="--dot:' + col + '"><i>' + esc(f.tool) + '</i> ' + esc(f.text) + '</div></div>';
+      div.title = f.tool + ' ' + f.text; div.innerHTML = '<div class="t">' + clock(ev) + '</div><div><div class="who" style="color:' + sw + '">' + esc(f.agentLabel) + (f.failed ? ' <span style="color:var(--muted)">失敗</span>' : '') + '</div><div class="what" style="--dot:' + col + '"><i>' + esc(f.tool) + '</i> ' + esc(f.text) + '</div></div>';
       div.addEventListener('click', () => { ui.clearFeedSel(); div.classList.add('sel'); listeners.event.forEach(fn => fn(i)); });
       div.addEventListener('keydown', e => { if (e.key === 'Enter') div.click(); });
       if (tabSel !== 'all' && tabSel !== f.agent) div.classList.add('hide');
