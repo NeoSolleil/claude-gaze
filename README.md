@@ -206,7 +206,7 @@ Hooks は Claude Code の起動時に読まれます。`npm run hooks:install` �
 | 「ポート 4820 は使用中」で起動できない | 既に claude-gaze が動いています。そのまま使うか、`GAZE_PORT=4821 npm start` と `node scripts/install-hooks.mjs --port 4821` でポートを揃える |
 | 「サーバ未接続」と出る | ブラウザが SSE を張れていません。`npm start` の出力と、URL が `http://127.0.0.1:4820/` か確認 |
 | ファイルが右列に出ず「コマンド」に `cat` が出る | 推定できなかった Bash です。cwd 基準で実在するファイルだけを拾います |
-| 3D が真っ黒 | WebGL が無効なブラウザ。2D を使ってください |
+| 3D を選ぶと「WebGL が使えません」と出て 2D に戻る | ブラウザが WebGL を出していません（`chrome://gpu` の WebGL 欄）。GPU のないリモートデスクトップ（xrdp など）で起こります。2D を使うか、GPU のある PC のブラウザで開いてください（`ssh -L 4820:127.0.0.1:4820 <host>` で転送）。Chrome は `--enable-unsafe-swiftshader` で起動すると CPU で描けますが、このフラグは他のサイトにも効くので、`--user-data-dir` で claude-gaze 専用のプロファイルを分けてください |
 
 動作確認だけしたいときは、サーバを起動した状態で架空セッションを投入できます。
 

@@ -11,10 +11,19 @@ let state = createState(), current = null, es = null, paused = false; const buff
 const views = { map: null, lanes: null, '3d': null }; let view = 'map'; let renderer = null; const fed = { map: 0, lanes: 0, '3d': 0 };
 const containers = { map: document.getElementById('cy'), lanes: document.getElementById('cy'), '3d': document.getElementById('g3d') };
 
+const viewEl = document.getElementById('view'), noticeEl = document.getElementById('notice');
+const NOGL = '3D 表示に必要な WebGL が、このブラウザでは使えません。GPU のないリモートデスクトップ（xrdp など）で起こります。<br>2D 表示を使うか、GPU のある PC のブラウザで開いてください（WebGL の状態は <code>chrome://gpu</code> で確認できます）。';
+/** 空文字で隠す。html は固定文言か esc 済みのものだけを渡す */
+function notice(html) { noticeEl.hidden = !html; noticeEl.querySelector('span').innerHTML = html; }
+noticeEl.querySelector('button').addEventListener('click', () => notice(''));
+/** GPU のない環境では Chrome が WebGL を出さない（--enable-unsafe-swiftshader なしでは CPU 描画に落ちない。Chrome 147 で確認） */
+function hasWebGL() { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }
+
 async function getRenderer(v) {
   if (v === '3d') {
     if (!views['3d']) {
-      for (const src of ['/vendor/three.min.js', '/vendor/three-spritetext.min.js', '/vendor/3d-force-graph.min.js']) await new Promise((ok, ng) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ng; document.head.appendChild(s); });
+      if (!hasWebGL()) throw new Error('nogl');
+      for (const src of ['/vendor/three.min.js', '/vendor/three-spritetext.min.js', '/vendor/3d-force-graph.min.js']) await new Promise((ok, ng) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ng(new Error(src + ' を読めません')); document.head.appendChild(s); });
       const { createGraph3D } = await import('./graph3d.js');
       views['3d'] = createGraph3D({ model, ui, container: containers['3d'] });
     }
@@ -24,7 +33,10 @@ async function getRenderer(v) {
   return views[v];
 }
 async function switchView(v) {
-  const r = await getRenderer(v);
+  let r;
+  // 描けないときは元の表示に戻し、理由を出す（黙って真っ黒にしない）
+  try { r = await getRenderer(v); } catch (e) { viewEl.value = view; notice(e.message === 'nogl' ? NOGL : '3D 表示を開けませんでした: ' + esc(e.message) + '<br>2D 表示を使ってください。'); return; }
+  notice('');
   containers['3d'].hidden = v !== '3d'; containers.map.hidden = v === '3d';
   if (renderer && renderer !== r) renderer.clearFocus();
   if (v !== '3d' && r.mode !== v) { r.setMode(v); r.reset(); fed.map = 0; fed.lanes = 0; }
@@ -81,7 +93,7 @@ else {
 ui.on('event', i => renderer && renderer.selectEvent(i));
 ui.on('tab', t => renderer && renderer.setFocus(t));
 ui.on('filters', f => renderer && renderer.setFilters(f));
-document.getElementById('view').addEventListener('change', e => switchView(e.target.value));
+viewEl.addEventListener('change', e => switchView(e.target.value));
 document.getElementById('play').addEventListener('click', e => { paused = !paused; e.target.textContent = paused ? '再生' : '一時停止'; if (!paused) { const q = buffer.splice(0); bufferedEl.textContent = ''; q.forEach(handle); } });
 const initialView = new URLSearchParams(location.search).get('view'); if (initialView && initialView in views) { view = initialView; document.getElementById('view').value = view; }
 switchView(view);

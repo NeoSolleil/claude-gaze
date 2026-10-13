@@ -44,6 +44,11 @@ aside.right { grid-area: right; border-left: 1px solid var(--line); background: 
 #cy, #g3d { position: absolute; inset: 0; }
 #g3d canvas { outline: none; }
 #cy[hidden], #g3d[hidden] { display: none; }
+.notice { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); width: max-content; max-width: min(560px, calc(100% - 32px)); display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--panel); color: var(--fg); border: 1px solid var(--accent); border-radius: 6px; font-size: 12px; line-height: 1.6; z-index: 6; }
+.notice[hidden] { display: none; }
+.notice code { font-family: var(--font-mono); font-size: 11px; }
+.notice button { flex: none; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.notice button:hover { color: var(--fg); }
 .resizer { position: absolute; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
 .resizer.l { left: -4px; } .resizer.r { right: -4px; }
 .resizer:hover, .resizer.on { background: color-mix(in srgb, var(--accent) 35%, transparent); }
@@ -137,6 +142,7 @@ select { font: inherit; font-size: 12px; background: var(--panel); color: var(--
   <main class="graph">
     <div id="cy"></div>
     <div id="g3d" hidden></div>
+    <div id="notice" class="notice" role="alert" hidden><span></span><button type="button" aria-label="閉じる">×</button></div>
     <div class="resizer l" data-side="left"></div>
     <div class="resizer r" data-side="right"></div>
     <div class="legend">
