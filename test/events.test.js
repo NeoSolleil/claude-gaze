@@ -49,6 +49,14 @@ test('サブエージェント: PostToolUse が先に来ても主体を作る。
   assert.equal(by(ops2, 'agentEnd')[0].id, 'ag1'); assert.equal(st.agents.ag1.ended, true);
 });
 
+test('Start もツール使用もない主体の SubagentStop（進捗要約の内部エージェント）は主体を作らない', () => {
+  const st = createState();
+  reduce(st, post('Read', { file_path: CWD + '/a.ts' }));
+  const ops = reduce(st, { hook_event_name: 'SubagentStop', session_id: 's1', cwd: CWD, agent_id: 'sum1', agent_type: '', last_assistant_message: 'Inspecting route handlers in voices.py' });
+  assert.deepEqual(ops, []);
+  assert.equal(st.agents.sum1, undefined); assert.deepEqual(st.order, ['main']);
+});
+
 test('Stop → 「いま」を消す。UserPromptSubmit → ターン', () => {
   const st = createState();
   const o1 = reduce(st, { hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd: CWD, prompt: 'やって' });

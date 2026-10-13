@@ -62,8 +62,11 @@ export function reduce(state, ev) {
   if (!state.root && ev.cwd) { state.root = norm(ev.cwd).replace(/\/$/, ''); state.rootName = base(state.root); ops.push({ op: 'session', cwd: state.root }); }
   ensureAgent(state, ops, 'main', 'main', true);
   const a = ev.agent_id || 'main';
-  if (a !== 'main') ensureAgent(state, ops, a, ev.agent_type || 'subagent', false);
   const name = ev.hook_event_name;
+  // 進捗要約などの内部エージェントは、Start もツール使用もなく agent_type 空の SubagentStop だけが約 30 秒ごとに届く（実機で確認）。
+  // 見たことのない主体の終了だけでは主体を作らない
+  if (a !== 'main' && !state.agents[a] && (name === 'SubagentStop' || name === 'Stop')) return ops;
+  if (a !== 'main') ensureAgent(state, ops, a, ev.agent_type || 'subagent', false);
 
   if (name === 'UserPromptSubmit') {
     state.turn += 1;

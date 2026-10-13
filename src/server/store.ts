@@ -51,7 +51,8 @@ export function record(e: HookEvent): StoredEvent {
   }
   if (!s.cwd && e.cwd) s.cwd = e.cwd;
   s.lastAt = now;
-  if (e.agent_id) s.agents.add(e.agent_id);
+  // 終了イベントだけでは主体に数えない（進捗要約の内部エージェント対策。src/web/events.js の reduce と同じ判定）
+  if (e.agent_id && e.hook_event_name !== 'SubagentStop' && e.hook_event_name !== 'Stop') s.agents.add(e.agent_id);
   if (e.hook_event_name === 'SessionEnd') s.ended = true;
   if (e.hook_event_name === 'SessionStart') s.ended = false;
 
